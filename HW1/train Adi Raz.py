@@ -264,6 +264,63 @@ def train(model, data, epochs=100, batch_size=64):
 
     return model_best, train_losses, valid_losses
 
+import matplotlib.pyplot as plt
+
+def plot_density(X,Y,Z,figsize =(15, 9), s_title='Z',
+                elev = 45, azim = 12,
+                proj_offset=-0.05, samples=None, save=False, fig_type='svg'):
+    # Creating figure
+    fig = plt.figure(figsize =figsize)
+    ax = plt.axes(projection ='3d')
+
+    # Creating plot
+    surf = ax.plot_surface(X,Y,Z,
+                        cmap = 'turbo',
+                        edgecolor ='none',
+                        alpha = 0.7)
+    fig.colorbar(surf, ax = ax,shrink = 0.5, aspect = 5)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    if samples is not None:
+        ax.contourf(X, Y, Z, zdir='z', offset=proj_offset, cmap='turbo')
+        # Adjust the limits, ticks and view angle
+        ax.set_zlim(proj_offset,Z.max())
+        ztick = np.linspace(start=0, stop=density.max()*1.1,num=6).tolist()
+        ax.set_zticks(ztick,[f'{value:.2f}' for value in ztick])
+        if samples is not None:
+            ax.scatter(samples.x,samples.y,proj_offset,s=.06,c='white')
+    ax.view_init(elev=elev, azim=azim)
+    plt.tight_layout()
+
+    if save:
+        f_name=s_title.replace('\{','').replace('\}','').replace('$','')
+        fig_path = os.path.join(os.path.curdir, 'figures',f_name+'.'+fig_type)
+        print(f"Saving fig to {fig_path}")
+        plt.savefig(fig_path)
+
+    # show plot
+    ax.set_title(s_title)
+    plt.show()
+    return fig,ax
+
+def train_dist(dist, N=1500,nepochs=500,K=4,plot=True):
+    torch.manual_seed(8)
+    np.random.seed(0)
+    num_samples = N
+    data = ToyDataset(dist, num_samples=num_samples)
+    # instantiate model and optimize the parameters\
+    Flow_model = CouplingFlow(num_layers=K)
+    moon_model, train_loss, valid_loss = train(Flow_model, data, epochs=nepochs)
+    if plot:
+        g = torch.meshgrid(torch.linspace(-4,4,1000),torch.linspace(-4,4,1000))
+        grid = torch.concat((g[0],g[1]),dim=0).reshape(2, -1).T
+        log_p = moon_model.log_probability(grid)
+        log_p_mesh = (log_p.T).reshape(g[0].shape[0],g[0].shape[1])
+        log_p_mesh_np = log_p_mesh.detach().numpy()
+        plot_density(g[0],g[1],log_p_mesh_np)
+    return moon_model,train_loss,valid_loss
+
+train_dist('GaussiansGrid')
 
 # seeds to ensure reproducibility
 torch.manual_seed(8)
