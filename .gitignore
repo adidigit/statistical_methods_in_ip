@@ -128,3 +128,11 @@ dmypy.json
 # Pyre type checker
 .pyre/
 /HW1/figures/
+HW1/backup.ipynb
+HW1/HW1_Spring2022_KDE_NormalizingFlows.ipynb.orig
+HW1/.idea/.gitignore
+HW1/.idea/HW1.iml
+HW1/.idea/misc.xml
+HW1/.idea/modules.xml
+HW1/.idea/vcs.xml
+HW1/.idea/inspectionProfiles/profiles_settings.xml
