@@ -117,12 +117,13 @@ class CouplingLayer(nn.Module):
         inv_mask = 1 - self.mask
         x_part_2 = torch.mul(x, inv_mask)
         s = self.s_func(x_part_1)
-        t = self.t_func(x_part_1)
-        exp_scale = torch.exp(torch.mul(s, self.scale_factor))
+        t = self.t_func(x_part_1) * inv_mask
+        scale_s = torch.mul(s, self.scale_factor)
+        exp_scale = torch.exp(scale_s)
         y_part_1 = x_part_1
         y_part_2 = torch.mul(torch.mul(exp_scale, x_part_2) + t, inv_mask)
         y = y_part_1 + y_part_2
-        log_det_jac = torch.sum(s)
+        log_det_jac = torch.sum(scale_s*inv_mask,dim=1)
         return y, log_det_jac
 
     def inverse(self, y):
@@ -320,20 +321,6 @@ def train_dist(dist, N=1500,nepochs=500,K=4,plot=True):
         plot_density(g[0],g[1],log_p_mesh_np)
     return moon_model,train_loss,valid_loss
 
-train_dist('GaussiansGrid')
-
+moon_model,train_loss,valid_loss = train_dist('GaussiansGrid',nepochs=1000)
+os.wait()
 # seeds to ensure reproducibility
-torch.manual_seed(8)
-np.random.seed(0)
-
-# dataset
-num_samples = 1500
-data = ToyDataset('Moons', num_samples=num_samples)
-
-# learning hyper-parameters
-K = 4
-nepochs = 1000
-
-# instantiate model and optimize the parameters
-Flow_model = CouplingFlow(num_layers=K)
-moon_model, train_loss, valid_loss = train(Flow_model, data, epochs=nepochs)
