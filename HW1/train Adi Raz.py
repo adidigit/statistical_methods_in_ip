@@ -164,6 +164,7 @@ class CouplingFlow(nn.Module):
             x, log_det_jac_i = self.layers[i](x)
             log_det_jac += log_det_jac_i
         y = x  # switch to y for convinience
+        #y[torch.isnan(y)] = torch.Real #for stabilizing the results
         log_p_y = self.prior.log_prob(y)
         log_prob = log_p_y + log_det_jac
         return log_prob
@@ -304,7 +305,7 @@ def plot_density(X,Y,Z,figsize =(15, 9), s_title='Z',
     plt.show()
     return fig,ax
 
-def train_dist(dist, N=1500,nepochs=500,K=4,plot=True):
+def train_dist(dist, N=1500,nepochs=500,K=4):
     torch.manual_seed(8)
     np.random.seed(0)
     num_samples = N
@@ -312,15 +313,9 @@ def train_dist(dist, N=1500,nepochs=500,K=4,plot=True):
     # instantiate model and optimize the parameters\
     Flow_model = CouplingFlow(num_layers=K)
     moon_model, train_loss, valid_loss = train(Flow_model, data, epochs=nepochs)
-    if plot:
-        g = torch.meshgrid(torch.linspace(-4,4,1000),torch.linspace(-4,4,1000))
-        grid = torch.concat((g[0],g[1]),dim=0).reshape(2, -1).T
-        log_p = moon_model.log_probability(grid)
-        log_p_mesh = (log_p.T).reshape(g[0].shape[0],g[0].shape[1])
-        log_p_mesh_np = log_p_mesh.detach().numpy()
-        plot_density(g[0],g[1],log_p_mesh_np)
     return moon_model,train_loss,valid_loss
 
-moon_model,train_loss,valid_loss = train_dist('GaussiansGrid',nepochs=1000)
+moon_model,train_loss,valid_loss = train_dist('Circles',nepochs=500)
+moon_model.log_probability(torch.tensor([[-2,2]]))
 os.wait()
 # seeds to ensure reproducibility
