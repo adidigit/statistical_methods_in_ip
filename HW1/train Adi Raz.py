@@ -117,12 +117,13 @@ class CouplingLayer(nn.Module):
         inv_mask = 1 - self.mask
         x_part_2 = torch.mul(x, inv_mask)
         s = self.s_func(x_part_1)
-        t = self.t_func(x_part_1)
-        exp_scale = torch.exp(torch.mul(s, self.scale_factor))
+        t = self.t_func(x_part_1) * inv_mask
+        scale_s = torch.mul(s, self.scale_factor)
+        exp_scale = torch.exp(scale_s)
         y_part_1 = x_part_1
         y_part_2 = torch.mul(torch.mul(exp_scale, x_part_2) + t, inv_mask)
         y = y_part_1 + y_part_2
-        log_det_jac = torch.sum(s)
+        log_det_jac = torch.sum(scale_s*inv_mask,dim=1)
         return y, log_det_jac
 
     def inverse(self, y):
@@ -163,6 +164,7 @@ class CouplingFlow(nn.Module):
             x, log_det_jac_i = self.layers[i](x)
             log_det_jac += log_det_jac_i
         y = x  # switch to y for convinience
+        #y[torch.isnan(y)] = torch.Real #for stabilizing the results
         log_p_y = self.prior.log_prob(y)
         log_prob = log_p_y + log_det_jac
         return log_prob
@@ -264,19 +266,56 @@ def train(model, data, epochs=100, batch_size=64):
 
     return model_best, train_losses, valid_losses
 
+import matplotlib.pyplot as plt
 
+def plot_density(X,Y,Z,figsize =(15, 9), s_title='Z',
+                elev = 45, azim = 12,
+                proj_offset=-0.05, samples=None, save=False, fig_type='svg'):
+    # Creating figure
+    fig = plt.figure(figsize =figsize)
+    ax = plt.axes(projection ='3d')
+
+    # Creating plot
+    surf = ax.plot_surface(X,Y,Z,
+                        cmap = 'turbo',
+                        edgecolor ='none',
+                        alpha = 0.7)
+    fig.colorbar(surf, ax = ax,shrink = 0.5, aspect = 5)
+    ax.set_xlabel('x')
+    ax.set_ylabel('y')
+    if samples is not None:
+        ax.contourf(X, Y, Z, zdir='z', offset=proj_offset, cmap='turbo')
+        # Adjust the limits, ticks and view angle
+        ax.set_zlim(proj_offset,Z.max())
+        ztick = np.linspace(start=0, stop=density.max()*1.1,num=6).tolist()
+        ax.set_zticks(ztick,[f'{value:.2f}' for value in ztick])
+        if samples is not None:
+            ax.scatter(samples.x,samples.y,proj_offset,s=.06,c='white')
+    ax.view_init(elev=elev, azim=azim)
+    plt.tight_layout()
+
+    if save:
+        f_name=s_title.replace('\{','').replace('\}','').replace('$','')
+        fig_path = os.path.join(os.path.curdir, 'figures',f_name+'.'+fig_type)
+        print(f"Saving fig to {fig_path}")
+        plt.savefig(fig_path)
+
+    # show plot
+    ax.set_title(s_title)
+    plt.show()
+    return fig,ax
+
+def train_dist(dist, N=1500,nepochs=500,K=4):
+    torch.manual_seed(8)
+    np.random.seed(0)
+    num_samples = N
+    data = ToyDataset(dist, num_samples=num_samples)
+    # instantiate model and optimize the parameters\
+    Flow_model = CouplingFlow(num_layers=K)
+    moon_model, train_loss, valid_loss = train(Flow_model, data, epochs=nepochs)
+    return moon_model,train_loss,valid_loss
+
+moon_model,train_loss,valid_loss = train_dist('Circles',nepochs=500)
+moon_model.log_probability(torch.tensor([[-2,2]]))
+os.wait()
 # seeds to ensure reproducibility
-torch.manual_seed(8)
-np.random.seed(0)
-
-# dataset
-num_samples = 1500
-data = ToyDataset('Moons', num_samples=num_samples)
-
-# learning hyper-parameters
-K = 4
-nepochs = 1000
-
-# instantiate model and optimize the parameters
-Flow_model = CouplingFlow(num_layers=K)
-moon_model, train_loss, valid_loss = train(Flow_model, data, epochs=nepochs)
